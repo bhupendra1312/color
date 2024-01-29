@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Color Code</title>
+    <style>
+        #video {
+            width: 100%;
+            max-width: 640px;
+            margin: auto;
+        }
+
+        #colorCode {
+            font-size: 24px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Camera Color Code</h1>
+    <video id="video" autoplay></video>
+    <div id="colorCode"></div>
+    <button id="switchCamera">Switch Camera</button>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const video = document.getElementById('video');
+            const colorCodeDiv = document.getElementById('colorCode');
+            const switchCameraButton = document.getElementById('switchCamera');
+
+            let currentCamera = 0; // 0 represents the front camera, 1 represents the rear camera
+
+            navigator.mediaDevices.enumerateDevices().then(devices => {
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+                if (videoDevices.length > 1) {
+                    switchCameraButton.style.display = 'block';
+                }
+
+                switchCameraButton.addEventListener('click', () => {
+                    currentCamera = 1 - currentCamera; // Toggle between 0 and 1
+                    switchCamera();
+                });
+
+                switchCamera();
+            });
+
+            function switchCamera() {
+                navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: currentCamera === 0 ? 'user' : 'environment'
+                    }
+                }).then((stream) => {
+                    video.srcObject = stream;
+                }).catch((error) => {
+                    console.error('Error accessing camera:', error);
+                });
+            }
+
+            video.addEventListener('loadedmetadata', () => {
+                setInterval(() => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const context = canvas.getContext('2d');
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                    const imageData = context.getImageData(0, 0, canvas.width, canvas.height).data;
+                    const averageColor = getAverageColor(imageData);
+                    const wavelength = calculateWavelength(averageColor);
+
+                    const colorCodeHex = rgbToHex(averageColor);
+                    const colorCodeRGB = `RGB: ${averageColor[0]}, ${averageColor[1]}, ${averageColor[2]}`;
+
+                    colorCodeDiv.innerHTML = `
+                        <p>Current Color Code:</p>
+                        <p>Hex: ${colorCodeHex}</p>
+                        <p>${colorCodeRGB}</p>
+                        <p>Estimated Wavelength: ${wavelength} nm</p>
+                    `;
+                }, 1000);
+            });
+
+            function getAverageColor(imageData) {
+                let totalRed = 0;
+                let totalGreen = 0;
+                let totalBlue = 0;
+                let totalPixels = 0;
+
+                for (let i = 0; i < imageData.length; i += 4) {
+                    totalRed += imageData[i];
+                    totalGreen += imageData[i + 1];
+                    totalBlue += imageData[i + 2];
+                    totalPixels++;
+                }
+
+                const averageRed = Math.round(totalRed / totalPixels);
+                const averageGreen = Math.round(totalGreen / totalPixels);
+                const averageBlue = Math.round(totalBlue / totalPixels);
+
+                return [averageRed, averageGreen, averageBlue];
+            }
+
+            function componentToHex(c) {
+                const hex = c.toString(16);
+                return hex.length === 1 ? '0' + hex : hex;
+            }
+
+            function rgbToHex([r, g, b]) {
+                const redHex = componentToHex(r);
+                const greenHex = componentToHex(g);
+                const blueHex = componentToHex(b);
+
+                return `#${redHex}${greenHex}${blueHex}`;
+            }
+
+            function calculateWavelength([r, g, b]) {
+                const wavelengthFunction = function (wavelength) {
+                    var Gamma = 0.80,
+                        IntensityMax = 255,
+                        factor, red, green, blue;
+                    if ((wavelength >= 380) && (wavelength < 440)) {
+                        red = -(wavelength - 440) / (440 - 380);
+                        green = 0.0;
+                        blue = 1.0;
+                    } else if ((wavelength >= 440) && (wavelength < 490)) {
+                        red = 0.0;
+                        green = (wavelength - 440) / (490 - 440);
+                        blue = 1.0;
+                    } else if ((wavelength >= 490) && (wavelength < 510)) {
+                        red = 0.0;
+                        green = 1.0;
+                        blue = -(wavelength - 510) / (510 - 490);
+                    } else if ((wavelength >= 510) && (wavelength < 580)) {
+                        red = (wavelength - 510) / (580 - 510);
+                        green = 1.0;
+                        blue = 0.0;
+                    } else if ((wavelength >= 580) && (wavelength < 645)) {
+                        red = 1.0;
+                        green = -(wavelength - 645) / (645 - 580);
+                        blue = 0.0;
+                    } else if ((wavelength >= 645) && (wavelength < 781)) {
+                        red = 1.0;
+                        green = 0.0;
+                        blue = 0.0;
+                    } else {
+                        red = 0.0;
+                        green = 0.0;
+                        blue = 0.0;
+                    }
+                    // Let the intensity fall off near the vision limits
+                    if ((wavelength >= 380) && (wavelength < 420)) {
+                        factor = 0.3 + 0.7 * (wavelength - 380) / (420 - 380);
+                    } else if ((wavelength >= 420) && (wavelength < 701)) {
+                        factor = 1.0;
+                    } else if ((wavelength >= 701) && (wavelength < 781)) {
+                        factor = 0.3 + 0.7 * (780 - wavelength) / (780 - 700);
+                    } else {
+                        factor = 0.0;
+                    }
+                    if (red !== 0) {
+                        red = Math.round(IntensityMax * Math.pow(red * factor, Gamma));
+                    }
+                    if (green !== 0) {
+                        green = Math.round(IntensityMax * Math.pow(green * factor, Gamma));
+                    }
+                    if (blue !== 0) {
+                        blue = Math.round(IntensityMax * Math.pow(blue * factor, Gamma));
+                    }
+                    return [red, green, blue];
+                };
+
+                // Calculate wavelength based on RGB values
+                const totalIntensity = r + g + b;
+
+                const redRatio = r / totalIntensity;
+                const greenRatio = g / totalIntensity;
+                const blueRatio = b / totalIntensity;
+
+                const estimatedWavelength = (redRatio * 700) + (greenRatio * 530) + (blueRatio * 460);
+
+                return Math.round(estimatedWavelength);
+            }
+        });
+    </script>
+</body>
+
+</html>
